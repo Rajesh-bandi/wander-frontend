@@ -1,5 +1,5 @@
 # ────────────────────────────────────────────
-# Wander Frontend — Deploy to AWS ECS (FIXED)
+# Wander Frontend — Deploy to AWS ECS (FINAL)
 # ────────────────────────────────────────────
 
 name: Deploy Frontend
@@ -12,20 +12,21 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPO: wander-frontend
-  ECS_CLUSTER: waader-cluster   # ✅ FIXED TYPO
+  ECS_CLUSTER: waader-cluster
   ECS_SERVICE: wander-frontend-service
-  TASK_DEFINITION: task-wander-frontend   # 👈 your task definition name
+  TASK_DEFINITION: task-wander-frontend
+  CONTAINER_NAME: frontend   # 🔥 CHANGE if your container name is different
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout code
+      # 1. Checkout
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Configure AWS
+      # 2. AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -55,27 +56,29 @@ jobs:
 
           echo "image=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      # 5. Download current task definition
+      # 5. Get current task definition
       - name: Download task definition
         run: |
           aws ecs describe-task-definition \
             --task-definition $TASK_DEFINITION \
             --query taskDefinition > task-def.json
 
-      # 6. Update image in task definition
+      # 6. Update image USING CONTAINER NAME (IMPORTANT FIX)
       - name: Update task definition image
-        id: task-def
         run: |
           NEW_IMAGE=${{ steps.build-image.outputs.image }}
 
           cat task-def.json | jq \
             --arg IMAGE "$NEW_IMAGE" \
-            '.containerDefinitions[0].image = $IMAGE |
-             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+            --arg NAME "$CONTAINER_NAME" \
+            '.containerDefinitions = (.containerDefinitions | map(
+              if .name == $NAME then .image = $IMAGE else . end
+            )) |
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
             > new-task-def.json
 
-      # 7. Register new task definition
-      - name: Register new task definition
+      # 7. Register new revision
+      - name: Register task definition
         id: register
         run: |
           TASK_DEF_ARN=$(aws ecs register-task-definition \
@@ -85,7 +88,7 @@ jobs:
 
           echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
 
-      # 8. Deploy new revision
+      # 8. Deploy
       - name: Deploy to ECS
         run: |
           aws ecs update-service \
