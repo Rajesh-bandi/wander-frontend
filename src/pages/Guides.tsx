@@ -27,9 +27,9 @@ export default function Guides() {
 
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a place..." className="h-11 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm outline-none focus:border-primary" />
+          <div className="relative flex items-center">
+            <Search className="pointer-events-none absolute left-4 h-4 w-4 text-muted-foreground" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a place..." className="h-11 w-full rounded-xl border border-border bg-background pl-11 pr-4 text-sm outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/30" />
           </div>
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Country</label>
