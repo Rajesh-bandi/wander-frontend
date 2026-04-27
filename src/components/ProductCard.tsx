@@ -23,12 +23,15 @@ export function ProductCard({ product }: { product: Product }) {
           <span className="ml-1">{product.rating.toFixed(1)} ({product.reviewCount})</span>
         </div>
         <div className="mt-auto flex items-center justify-between pt-2">
-          <span className="font-serif text-lg">${product.price}</span>
+          <span className="font-serif text-lg">
+            {product.currency === "INR" ? "₹" : "$"}{product.price}
+          </span>
           <button
             onClick={(e) => { e.preventDefault(); addToCart(product.id); }}
-            className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90 active:scale-95"
+            disabled={product.stock <= 0}
+            className={`inline-flex items-center gap-1 rounded-full px-3 py-2 text-xs font-semibold text-primary-foreground transition ${product.stock > 0 ? "bg-primary hover:opacity-90 active:scale-95" : "bg-muted text-muted-foreground cursor-not-allowed"}`}
           >
-            <ShoppingBag className="h-3.5 w-3.5" /> Add
+            <ShoppingBag className="h-3.5 w-3.5" /> {product.stock > 0 ? "Add" : "Out of Stock"}
           </button>
         </div>
       </div>

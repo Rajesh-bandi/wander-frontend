@@ -60,11 +60,31 @@ export type Product = {
   name: string;
   image: string;
   price: number;
+  currency: string;
+  stock: number;
   rating: number;
   reviewCount: number;
   category: string;
   description: string;
   reviews: ProductReview[];
+};
+
+export type OrderItem = {
+  productId: string;
+  name: string;
+  image: string;
+  priceAtPurchase: number;
+  quantity: number;
+};
+
+export type Order = {
+  id: string;
+  userId: string;
+  items: OrderItem[];
+  totalAmount: number;
+  currency: string;
+  status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+  createdAt: string;
 };
 
 export type Guide = {

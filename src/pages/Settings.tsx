@@ -188,6 +188,10 @@ function OrdersSection() {
       .finally(() => setLoading(false));
   }, []);
 
+  const formatPrice = (price: number, curr: string) => {
+    return curr === "INR" ? `₹${price?.toFixed(2)}` : `$${price?.toFixed(2)}`;
+  };
+
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   if (orders.length === 0) return <EmptyState icon={ShoppingBag} title="No orders yet" description="Your purchase history will appear here." />;
 
@@ -197,11 +201,11 @@ function OrdersSection() {
         const status = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
         const StatusIcon = status.icon;
         return (
-          <div key={order._id} className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div key={order.id} className="rounded-2xl border border-border bg-card overflow-hidden">
             {/* Order header */}
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div>
-                <div className="text-xs text-muted-foreground">Order #{order._id.slice(-8).toUpperCase()}</div>
+                <div className="text-xs text-muted-foreground">Order #{order.id.slice(-8).toUpperCase()}</div>
                 <div className="text-[10px] text-muted-foreground">{new Date(order.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</div>
               </div>
               <div className={cn("flex items-center gap-1 text-xs font-semibold", status.color)}>
@@ -217,9 +221,9 @@ function OrdersSection() {
                   <img src={item.image} alt={item.name} className="h-12 w-12 rounded-lg object-cover bg-muted" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold truncate">{item.name}</div>
-                    <div className="text-xs text-muted-foreground">Qty: {item.qty} × ${item.price?.toFixed(2)}</div>
+                    <div className="text-xs text-muted-foreground">Qty: {item.quantity} × {formatPrice(item.priceAtPurchase, order.currency)}</div>
                   </div>
-                  <div className="text-sm font-semibold">${(item.price * item.qty).toFixed(2)}</div>
+                  <div className="text-sm font-semibold">{formatPrice(item.priceAtPurchase * item.quantity, order.currency)}</div>
                 </div>
               ))}
             </div>
@@ -227,7 +231,7 @@ function OrdersSection() {
             {/* Total */}
             <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-3">
               <span className="text-xs font-semibold text-muted-foreground">Total</span>
-              <span className="text-base font-bold">${order.total?.toFixed(2)}</span>
+              <span className="text-base font-bold">{formatPrice(order.totalAmount, order.currency)}</span>
             </div>
           </div>
         );

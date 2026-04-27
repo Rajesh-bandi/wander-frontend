@@ -317,8 +317,8 @@ export const api = {
       const res = await request<{ product: any }>(`/products/${id}`);
       return normalizeProduct(res.product);
     },
-    addReview: async (productId: string, data: { rating: number; text: string }) => {
-      const res = await request<{ product: any }>(`/products/${productId}/review`, {
+    addReview: async (productId: string, data: { rating: number; comment: string }) => {
+      const res = await request<{ product: any }>(`/reviews/${productId}`, {
         method: "POST",
         body: JSON.stringify(data),
       });
@@ -328,16 +328,16 @@ export const api = {
 
   // ─── Orders ────────────────────────────────────────
   orders: {
-    place: async (items: { productId: string; qty: number }[], shippingAddress?: string) => {
+    place: async (items: { productId: string; quantity: number }[], shippingAddress?: string) => {
       const res = await request<{ order: any }>("/orders", {
         method: "POST",
         body: JSON.stringify({ items, shippingAddress }),
       });
-      return res.order;
+      return normalizeOrder(res.order);
     },
     getMyOrders: async () => {
-      const res = await request<{ orders: any[] }>("/orders");
-      return res.orders;
+      const res = await request<{ orders: any[] }>("/orders/my-orders");
+      return res.orders.map(normalizeOrder);
     },
   },
 
@@ -481,5 +481,24 @@ function normalizeChat(c: any) {
     requestStatus: c.requestStatus,
     _participants: Array.isArray(c.participants) ? c.participants.filter((u: any) => typeof u === "object").map(normalizeUser) : [],
     _planTitle: c.plan && typeof c.plan === "object" ? c.plan.title : undefined,
+  };
+}
+
+function normalizeOrder(o: any) {
+  if (!o) return o;
+  return {
+    id: String(o._id || o.id),
+    userId: typeof o.userId === "object" ? String(o.userId._id || o.userId.id) : String(o.userId),
+    items: (o.items || []).map((i: any) => ({
+      productId: typeof i.productId === "object" ? String(i.productId._id || i.productId.id) : String(i.productId),
+      name: i.name,
+      image: i.image,
+      priceAtPurchase: i.priceAtPurchase,
+      quantity: i.quantity,
+    })),
+    totalAmount: o.totalAmount,
+    currency: o.currency || "USD",
+    status: o.status,
+    createdAt: o.createdAt,
   };
 }

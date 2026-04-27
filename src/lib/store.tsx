@@ -34,6 +34,7 @@ type StoreContextValue = StoreState & {
   refreshPosts: () => Promise<void>;
   refreshPlans: () => Promise<void>;
   refreshChats: () => Promise<void>;
+  refreshProducts: () => Promise<void>;
 
   /* Actions */
   toggleLike: (postId: string) => void;
@@ -166,6 +167,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setChats(res as any);
   }, []);
 
+  const refreshProducts = useCallback(async () => {
+    const res = await api.products.getAll();
+    setProducts(res as any);
+  }, []);
+
   const value = useMemo<StoreContextValue>(() => ({
     token,
     currentUser,
@@ -185,6 +191,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     refreshPosts,
     refreshPlans,
     refreshChats,
+    refreshProducts,
 
     // Auth
     signup: async (data) => {
