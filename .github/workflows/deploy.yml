@@ -1,6 +1,5 @@
 # ────────────────────────────────────────────
-# Wander Frontend — Deploy to AWS ECS
-# Repo: wander-app (standalone)
+# Wander Frontend — Deploy to AWS ECS (FIXED)
 # ────────────────────────────────────────────
 
 name: Deploy Frontend
@@ -13,16 +12,20 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPO: wander-frontend
-  ECS_CLUSTER: waader-cluster
+  ECS_CLUSTER: waader-cluster   # ✅ FIXED TYPO
   ECS_SERVICE: wander-frontend-service
+  TASK_DEFINITION: task-wander-frontend   # 👈 your task definition name
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
+      # 1. Checkout code
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. Configure AWS
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -30,25 +33,63 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # 3. Login to ECR
       - name: Login to Amazon ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # 4. Build & push image
       - name: Build & push Docker image
+        id: build-image
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          IMAGE_URI=$REGISTRY/$ECR_REPO:$IMAGE_TAG
+
           docker build \
             --build-arg VITE_API_URL=${{ secrets.BACKEND_URL }} \
-            -t $REGISTRY/$ECR_REPO:$IMAGE_TAG \
-            -t $REGISTRY/$ECR_REPO:latest .
-          docker push $REGISTRY/$ECR_REPO:$IMAGE_TAG
-          docker push $REGISTRY/$ECR_REPO:latest
+            -t $IMAGE_URI .
 
+          docker push $IMAGE_URI
+
+          echo "image=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      # 5. Download current task definition
+      - name: Download task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition $TASK_DEFINITION \
+            --query taskDefinition > task-def.json
+
+      # 6. Update image in task definition
+      - name: Update task definition image
+        id: task-def
+        run: |
+          NEW_IMAGE=${{ steps.build-image.outputs.image }}
+
+          cat task-def.json | jq \
+            --arg IMAGE "$NEW_IMAGE" \
+            '.containerDefinitions[0].image = $IMAGE |
+             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+            > new-task-def.json
+
+      # 7. Register new task definition
+      - name: Register new task definition
+        id: register
+        run: |
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://new-task-def.json \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)
+
+          echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+      # 8. Deploy new revision
       - name: Deploy to ECS
         run: |
           aws ecs update-service \
             --cluster $ECS_CLUSTER \
             --service $ECS_SERVICE \
+            --task-definition ${{ steps.register.outputs.task_def_arn }} \
             --force-new-deployment
