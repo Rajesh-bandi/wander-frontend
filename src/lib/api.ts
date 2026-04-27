@@ -75,7 +75,7 @@ async function uploadImage(file: File): Promise<string> {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || "Upload failed");
-  // Return full URL so images display correctly
+  // Images stored in MongoDB, served via /api/images/:id
   return `${import.meta.env.VITE_API_URL}${data.url}`;
 }
 

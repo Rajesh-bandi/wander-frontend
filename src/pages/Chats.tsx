@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useStore } from "@/lib/store";
+import { useSocket } from "@/lib/socket";
 import { Avatar } from "@/components/Avatar";
 import { ChatBubble } from "@/components/ChatBubble";
 import { EmptyState } from "@/components/EmptyState";
@@ -9,7 +10,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function Chats() {
-  const { chats, currentUserId, getUser, getPlan, sendMessage, acceptChatRequest, rejectChatRequest } = useStore();
+  const { chats, currentUserId, getUser, getPlan, sendMessage, acceptChatRequest, rejectChatRequest, refreshChats } = useStore();
+  const { socket, clearChatUnread } = useSocket();
   const myChats = chats.filter((c) => c.participantIds.includes(currentUserId));
   const groups = myChats.filter((c) => c.type === "group");
   const privates = myChats.filter((c) => c.type === "private");
@@ -18,7 +20,27 @@ export default function Chats() {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll on new messages
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [active?.messages.length, activeId]);
+
+  // Join socket rooms for all chats
+  useEffect(() => {
+    if (!socket) return;
+    myChats.forEach((c) => socket.emit("join_chat", c.id));
+    return () => { myChats.forEach((c) => socket.emit("leave_chat", c.id)); };
+  }, [socket, myChats.length]);
+
+  // Listen for real-time messages and refresh
+  useEffect(() => {
+    const handler = () => { refreshChats(); };
+    window.addEventListener("socket:new_message", handler);
+    return () => window.removeEventListener("socket:new_message", handler);
+  }, [refreshChats]);
+
+  // Clear unread when opening a chat
+  useEffect(() => {
+    if (activeId) clearChatUnread(activeId);
+  }, [activeId, clearChatUnread]);
 
   const onSend = (e: React.FormEvent) => {
     e.preventDefault();

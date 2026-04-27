@@ -29,9 +29,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const me = useCurrentUser();
   const { cart, isPremium, logout } = useStore();
   const { theme, toggle: toggleTheme } = useTheme();
-  const { unreadCount } = useSocket();
+  const { unreadCount, unreadChatIds } = useSocket();
   const [cartOpen, setCartOpen] = useState(false);
   const cartCount = cart.reduce((s, c) => s + c.qty, 0);
+  const hasUnreadChats = unreadChatIds.size > 0;
 
   // Search state
   const [q, setQ] = useState("");
@@ -85,10 +86,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = isActive(loc, n.href);
+            const showDot = n.href === "/chats" && hasUnreadChats;
             return (
               <Link key={n.href} href={n.href}>
                 <span className={cn("group flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition", active ? "bg-primary/10 text-primary" : "text-foreground/70 hover:bg-muted hover:text-foreground")}>
-                  <Icon className="h-5 w-5" />{n.label}
+                  <span className="relative">
+                    <Icon className="h-5 w-5" />
+                    {showDot && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-sidebar" />}
+                  </span>
+                  {n.label}
                 </span>
               </Link>
             );
@@ -223,10 +229,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = isActive(loc, n.href);
+            const showDot = n.href === "/chats" && hasUnreadChats;
             return (
               <Link key={n.href} href={n.href}>
                 <span className={cn("flex flex-col items-center gap-0.5 py-2.5 text-[10px]", active ? "text-primary" : "text-muted-foreground")}>
-                  <Icon className="h-5 w-5" />{n.label}
+                  <span className="relative">
+                    <Icon className="h-5 w-5" />
+                    {showDot && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500" />}
+                  </span>
+                  {n.label}
                 </span>
               </Link>
             );

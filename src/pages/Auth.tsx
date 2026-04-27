@@ -51,13 +51,24 @@ export default function Auth({ mode }: { mode: Mode }) {
 
   const useMyLocation = () => {
     if (!navigator.geolocation) { toast.error("Geolocation not supported by your browser"); return; }
+
+    // Geolocation requires HTTPS (or localhost) in modern browsers
+    const isSecure = window.location.protocol === "https:" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    if (!isSecure) {
+      toast.error("Location detection requires HTTPS. Please enter your location manually.");
+      return;
+    }
+
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         setCoords({ lat: latitude, lng: longitude });
         try {
-          const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+          const resp = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { "Accept": "application/json" } }
+          );
           const data = await resp.json();
           if (data.display_name) {
             setAddress(data.display_name);

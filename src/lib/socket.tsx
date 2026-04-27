@@ -6,9 +6,11 @@ type SocketContextValue = {
   connected: boolean;
   notifications: any[];
   unreadCount: number;
+  unreadChatIds: Set<string>;
   fetchNotifications: () => Promise<void>;
   markAllRead: () => Promise<void>;
   markRead: (id: string) => Promise<void>;
+  clearChatUnread: (chatId: string) => void;
 };
 
 const SocketContext = createContext<SocketContextValue>({
@@ -16,9 +18,11 @@ const SocketContext = createContext<SocketContextValue>({
   connected: false,
   notifications: [],
   unreadCount: 0,
+  unreadChatIds: new Set(),
   fetchNotifications: async () => { },
   markAllRead: async () => { },
   markRead: async () => { },
+  clearChatUnread: () => { },
 });
 
 export const useSocket = () => useContext(SocketContext);
@@ -31,6 +35,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadChatIds, setUnreadChatIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const token = localStorage.getItem("wander.token");
@@ -52,9 +57,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setUnreadCount((prev) => prev + 1);
     });
 
-    // Real-time chat message — dispatch custom event for store to catch
+    // Real-time chat message — dispatch event + track unread
     s.on("new_message", (data) => {
       window.dispatchEvent(new CustomEvent("socket:new_message", { detail: data }));
+      // Mark chat as having unread messages
+      if (data.chatId) {
+        setUnreadChatIds((prev) => new Set(prev).add(data.chatId));
+      }
     });
 
     s.on("user_typing", (data) => {
@@ -115,15 +124,25 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     } catch { }
   };
 
+  const clearChatUnread = (chatId: string) => {
+    setUnreadChatIds((prev) => {
+      const next = new Set(prev);
+      next.delete(chatId);
+      return next;
+    });
+  };
+
   return (
     <SocketContext.Provider value={{
       socket: socketRef.current,
       connected,
       notifications,
       unreadCount,
+      unreadChatIds,
       fetchNotifications,
       markAllRead,
       markRead,
+      clearChatUnread,
     }}>
       {children}
     </SocketContext.Provider>
