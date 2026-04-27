@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { ProductCard } from "@/components/ProductCard";
 import { EmptyState } from "@/components/EmptyState";
@@ -7,10 +7,17 @@ import { ShoppingBag, Search } from "lucide-react";
 export default function Store() {
   const { products } = useStore();
   const categories = useMemo(() => ["All", ...Array.from(new Set(products.map((p) => p.category)))], [products]);
-  const max = useMemo(() => Math.ceil(Math.max(...products.map((p) => p.price)) / 10) * 10, [products]);
+  const maxProductPrice = useMemo(() => {
+    if (products.length === 0) return 500;
+    return Math.ceil(Math.max(...products.map((p) => p.price)) / 10) * 10;
+  }, [products]);
+
   const [cat, setCat] = useState("All");
-  const [maxPrice, setMaxPrice] = useState(max);
+  const [maxPrice, setMaxPrice] = useState(maxProductPrice);
   const [q, setQ] = useState("");
+
+  // Sync slider max when products load
+  useEffect(() => { setMaxPrice(maxProductPrice); }, [maxProductPrice]);
 
   const filtered = products.filter((p) =>
     (cat === "All" || p.category === cat) && p.price <= maxPrice &&
@@ -28,11 +35,16 @@ export default function Store() {
         <div className="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products..." className="h-11 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm outline-none focus:border-primary" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search products..."
+              className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/30"
+            />
           </div>
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Max price: ${maxPrice}</label>
-            <input type="range" min={20} max={max} value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))} className="w-full accent-primary" />
+            <input type="range" min={0} max={maxProductPrice} value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))} className="w-full accent-primary" />
           </div>
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</label>
