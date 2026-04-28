@@ -1,6 +1,7 @@
 export type User = {
   id: string;
   username: string;
+  email: string;
   displayName: string;
   avatar: string;
   coverImage: string;
@@ -9,6 +10,7 @@ export type User = {
   followers: number;
   following: number;
   isPremium: boolean;
+  isVerified: boolean;
 };
 
 export type Comment = {

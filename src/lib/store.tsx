@@ -26,9 +26,12 @@ type StoreState = {
 
 type StoreContextValue = StoreState & {
   /* Auth */
-  signup: (data: { username: string; email: string; password: string; displayName: string; location?: string }) => Promise<void>;
+  signup: (data: { username: string; email: string; password: string; displayName: string; location?: string; mobile?: string; address?: string; coordinates?: any }) => Promise<{ requiresVerification: boolean }>;
   signin: (data: { email: string; password: string }) => Promise<void>;
   logout: () => void;
+  verifyOTP: (email: string, otp: string, purpose: 'SIGNUP' | 'RESET_PASSWORD') => Promise<void>;
+  sendOTP: (email: string, purpose: 'SIGNUP' | 'RESET_PASSWORD') => Promise<void>;
+  deleteAccount: (data: { password: string; confirmation: string }) => Promise<void>;
 
   /* Data fetchers */
   refreshPosts: () => Promise<void>;
@@ -49,7 +52,8 @@ type StoreContextValue = StoreState & {
   rejectChatRequest: (chatId: string) => void;
   startPrivateChat: (userId: string) => Promise<string>;
   createPost: (data: { image: string; caption?: string; location?: string; tags?: string[] }) => Promise<Post>;
-  deletePost: (postId: string) => Promise<void>;
+  deletePost: (postId: string) => void;
+  updatePost: (postId: string, data: any) => Promise<any>;
   toggleBookmark: (postId: string) => void;
   addToCart: (productId: string, qty?: number) => void;
   setCartQty: (productId: string, qty: number) => void;
@@ -195,16 +199,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     // Auth
     signup: async (data) => {
-      const res = await api.auth.signup(data);
+      const res = await api.auth.register(data as any);
+      setTokenState(res.token);
+      setCurrentUser(res.user as any);
+      mergeUsers([res.user as any]);
+      return { requiresVerification: res.requiresVerification };
+    },
+    signin: async (data) => {
+      const res = await api.auth.login(data);
       setTokenState(res.token);
       setCurrentUser(res.user as any);
       mergeUsers([res.user as any]);
     },
-    signin: async (data) => {
-      const res = await api.auth.signin(data);
-      setTokenState(res.token);
-      setCurrentUser(res.user as any);
-      mergeUsers([res.user as any]);
+    verifyOTP: async (email: string, otp: string, purpose: 'SIGNUP' | 'RESET_PASSWORD') => {
+      const res = await api.auth.verifyOTP({ email, otp, purpose });
+      if (res.token && res.user) {
+        setTokenState(res.token);
+        setCurrentUser(res.user as any);
+        mergeUsers([res.user as any]);
+      }
+    },
+    sendOTP: async (email: string, purpose: 'SIGNUP' | 'RESET_PASSWORD') => {
+      await api.auth.sendOTP({ email, purpose });
+    },
+    deleteAccount: async (data: { password: string; confirmation: string }) => {
+      await api.auth.deleteAccount(data);
+      // Clear all local state
+      setToken(null);
+      setTokenState(null);
+      setCurrentUser(null);
+      setPosts([]);
+      setPlans([]);
+      setChats([]);
+      setUsers([]);
+      setLikedPostIds([]);
+      setSavedPostIds([]);
+      setFollows([]);
+      setCart([]);
     },
     logout: () => {
       setToken(null);
@@ -252,6 +283,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     deletePost: async (postId: string) => {
       await api.posts.delete(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
+    },
+    updatePost: async (postId: string, data: any) => {
+      const updated = await api.posts.update(postId, data);
+      setPosts((prev) => prev.map((p) => p.id === postId ? updated as any : p));
+      return updated as any;
     },
     toggleBookmark: async (postId: string) => {
       try {
@@ -362,5 +398,5 @@ export function useStore() {
 
 export function useCurrentUser() {
   const { currentUser } = useStore();
-  return currentUser || { id: "", username: "guest", displayName: "Guest", avatar: "", coverImage: "", bio: "", location: "", followers: 0, following: 0, isPremium: false };
+  return currentUser || { id: "", username: "guest", email: "", displayName: "Guest", avatar: "", coverImage: "", bio: "", location: "", followers: 0, following: 0, isPremium: false, isVerified: false };
 }

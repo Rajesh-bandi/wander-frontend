@@ -1,6 +1,6 @@
-import { Heart, MessageCircle, Send, MapPin, Trash2, CornerDownRight, X, Copy, Search, Loader2, MoreHorizontal, Tag, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Send, MapPin, Trash2, CornerDownRight, X, Copy, Search, Loader2, MoreHorizontal, Tag, Bookmark, Pencil, ImagePlus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { Avatar } from "./Avatar";
 import { useStore } from "@/lib/store";
@@ -29,13 +29,14 @@ export function PostCard({ post: initialPost }: { post: Post }) {
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
   const [deleted, setDeleted] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Sync local state when the store's post data changes
   useEffect(() => { setPost(initialPost); }, [initialPost]);
 
   const liked = likedPostIds.includes(post.id);
   const saved = savedPostIds.includes(post.id);
-  const author = getUser(post.authorId) || { id: post.authorId, username: "user", displayName: "User", avatar: "", coverImage: "", bio: "", location: "", followers: 0, following: 0, isPremium: false };
+  const author = getUser(post.authorId) || { id: post.authorId, username: "user", email: "", displayName: "User", avatar: "", coverImage: "", bio: "", location: "", followers: 0, following: 0, isPremium: false, isVerified: false };
   const isFollowing = follows.includes(author.id);
   const isMyPost = author.id === currentUserId;
 
@@ -116,6 +117,9 @@ export function PostCard({ post: initialPost }: { post: Post }) {
                 <div className="absolute right-0 top-full mt-1 z-10 w-36 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
                   <button onClick={() => { setShowDetail(true); setShowMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-muted">
                     View post
+                  </button>
+                  <button onClick={() => { setShowEditModal(true); setShowMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-muted">
+                    <Pencil className="h-3.5 w-3.5" /> Edit post
                   </button>
                   <button onClick={() => { handleDeletePost(); setShowMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10">
                     <Trash2 className="h-3.5 w-3.5" /> Delete post
@@ -277,6 +281,17 @@ export function PostCard({ post: initialPost }: { post: Post }) {
 
       {/* Post Detail Modal (for owner) */}
       <PostDetailModal open={showDetail} onClose={() => setShowDetail(false)} post={post} author={author} onDelete={handleDeletePost} isOwner={isMyPost} />
+
+      {/* Edit Post Modal */}
+      <AnimatePresence>
+        {showEditModal && (
+          <EditPostModal
+            post={post}
+            onClose={() => setShowEditModal(false)}
+            onSave={(updated) => { setPost(updated); setShowEditModal(false); }}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -508,4 +523,133 @@ function mapComments(raw: any[]) {
       }),
     };
   });
+}
+
+/* ─── Edit Post Modal ─── */
+function EditPostModal({ post, onClose, onSave }: { post: any; onClose: () => void; onSave: (updated: any) => void }) {
+  const { updatePost } = useStore();
+  const [caption, setCaption] = useState(post.caption || "");
+  const [location, setLocation] = useState(post.location || "");
+  const [image, setImage] = useState(post.image || "");
+  const [newImage, setNewImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      setNewImage(result);
+      setImage(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      const data: any = { caption, location };
+      if (newImage) data.image = image;
+      const updated = await updatePost(post.id, data);
+      toast.success("Post updated");
+      onSave(updated);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update post");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg rounded-2xl border border-border bg-background p-5 space-y-4 shadow-2xl"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold">Edit Post</h3>
+          <button onClick={onClose} className="rounded-full p-1.5 hover:bg-muted"><X className="h-5 w-5" /></button>
+        </div>
+
+        {/* Image preview / upload */}
+        <div className="relative group">
+          <img
+            src={image}
+            alt="Post preview"
+            className="w-full max-h-80 rounded-xl object-cover bg-muted"
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition rounded-xl">
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-black hover:bg-white transition"
+            >
+              <ImagePlus className="h-4 w-4" /> Change image
+            </button>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </div>
+
+        {/* Caption */}
+        <div>
+          <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Caption</label>
+          <textarea
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            className="input min-h-[80px] resize-none"
+            placeholder="Write a caption..."
+            maxLength={2000}
+          />
+        </div>
+
+        {/* Location */}
+        <div>
+          <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Location</label>
+          <div className="relative">
+            <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="input pl-10"
+              placeholder="Add location..."
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-full border border-border py-2.5 text-sm font-semibold transition hover:bg-muted"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="flex-1 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+          >
+            {loading ? <><Loader2 className="h-4 w-4 animate-spin inline mr-1" /> Saving...</> : "Save changes"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
 }

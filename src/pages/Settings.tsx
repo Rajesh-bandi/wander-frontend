@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
@@ -9,13 +9,16 @@ import { EmptyState } from "@/components/EmptyState";
 import {
   Settings as SettingsIcon, Moon, Sun, Monitor, Bookmark, ShoppingBag,
   Package, ChevronRight, Loader2, MapPin, Heart, MessageCircle, ArrowLeft,
-  Clock, CheckCircle, Truck, XCircle, Star,
+  Clock, CheckCircle, Truck, XCircle, Star, KeyRound, Eye, EyeOff, ShieldCheck,
+  AlertTriangle, Trash2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { PasswordStrength } from "@/components/PasswordStrength";
 import type { Post } from "@/data/types";
 
-type Section = "main" | "appearance" | "saved" | "orders";
+type Section = "main" | "appearance" | "saved" | "orders" | "account";
 
 export default function SettingsPage() {
   const { currentUser } = useStore();
@@ -42,6 +45,7 @@ export default function SettingsPage() {
               {section === "appearance" && "Appearance"}
               {section === "saved" && "Saved Posts"}
               {section === "orders" && "Order History"}
+              {section === "account" && "Account"}
             </h1>
             <p className="text-xs text-muted-foreground">@{currentUser.username}</p>
           </div>
@@ -53,6 +57,7 @@ export default function SettingsPage() {
           <motion.div key="main" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
             className="space-y-2">
             <MenuItem icon={Sun} label="Appearance" desc="Theme & display settings" onClick={() => setSection("appearance")} />
+            <MenuItem icon={KeyRound} label="Account" desc="Password & security" onClick={() => setSection("account")} />
             <MenuItem icon={Bookmark} label="Saved Posts" desc="Your bookmarked posts" onClick={() => setSection("saved")} />
             <MenuItem icon={ShoppingBag} label="Order History" desc="Your past purchases" onClick={() => setSection("orders")} />
           </motion.div>
@@ -73,6 +78,12 @@ export default function SettingsPage() {
         {section === "orders" && (
           <motion.div key="orders" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
             <OrdersSection />
+          </motion.div>
+        )}
+
+        {section === "account" && (
+          <motion.div key="account" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
+            <AccountSection />
           </motion.div>
         )}
       </AnimatePresence>
@@ -236,6 +247,315 @@ function OrdersSection() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ─── Account / Change Password ─── */
+function AccountSection() {
+  const { currentUser, deleteAccount } = useStore();
+  const [, navigate] = useLocation();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords don't match");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await api.auth.changePassword({ currentPassword, newPassword });
+      setSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast.success("Password changed successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to change password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== "DELETE") {
+      toast.error('Please type "DELETE" to confirm');
+      return;
+    }
+    if (!deletePassword) {
+      toast.error("Please enter your password");
+      return;
+    }
+    try {
+      setDeleteLoading(true);
+      await deleteAccount({ password: deletePassword, confirmation: deleteConfirmation });
+      toast.success("Account deleted. We're sorry to see you go.");
+      navigate("/login");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete account");
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteModal(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Verification status */}
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "grid h-10 w-10 shrink-0 place-items-center rounded-xl",
+            currentUser?.isVerified ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"
+          )}>
+            <ShieldCheck className={cn(
+              "h-5 w-5",
+              currentUser?.isVerified ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+            )} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold">Email Verification</div>
+            <div className={cn(
+              "text-xs",
+              currentUser?.isVerified ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+            )}>
+              {currentUser?.isVerified ? "Verified" : "Not verified"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Change password */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+            <KeyRound className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold">Change Password</div>
+            <div className="text-xs text-muted-foreground">Update your account password</div>
+          </div>
+        </div>
+
+        {success && (
+          <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-3 flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">Password changed successfully!</p>
+          </div>
+        )}
+
+        <form onSubmit={handleChangePassword} className="space-y-3">
+          <div>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Current password</label>
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type={showCurrent ? "text" : "password"}
+                required
+                value={currentPassword}
+                onChange={(e) => { setCurrentPassword(e.target.value); setSuccess(false); }}
+                className="input pl-10 pr-10"
+                placeholder="••••••••"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrent(!showCurrent)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+              >
+                {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">New password</label>
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type={showNew ? "text" : "password"}
+                required
+                value={newPassword}
+                onChange={(e) => { setNewPassword(e.target.value); setSuccess(false); }}
+                className="input pl-10 pr-10"
+                placeholder="••••••••"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNew(!showNew)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+              >
+                {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          {newPassword && <PasswordStrength password={newPassword} />}
+
+          <div>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Confirm new password</label>
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type={showConfirm ? "text" : "password"}
+                required
+                value={confirmPassword}
+                onChange={(e) => { setConfirmPassword(e.target.value); setSuccess(false); }}
+                className="input pl-10 pr-10"
+                placeholder="••••••••"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+              >
+                {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {confirmPassword && newPassword && confirmPassword !== newPassword && (
+              <p className="mt-1 text-[11px] text-red-500">Passwords don't match</p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || (confirmPassword !== "" && newPassword !== confirmPassword)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+          >
+            {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Updating...</> : "Change password"}
+          </button>
+        </form>
+      </div>
+
+      {/* Danger Zone - Delete Account */}
+      <div className="rounded-2xl border-2 border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-red-700 dark:text-red-400">Danger Zone</div>
+            <div className="text-xs text-red-600/70 dark:text-red-400/60">Irreversible and destructive actions</div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-white dark:bg-card p-4 space-y-3">
+          <div>
+            <div className="text-sm font-semibold">Delete Account</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Permanently delete your account and all associated data. This action cannot be undone.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98]"
+          >
+            <Trash2 className="h-4 w-4" /> Delete my account
+          </button>
+        </div>
+      </div>
+
+      {/* Delete Account Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setShowDeleteModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl border border-border bg-background p-6 space-y-4 shadow-2xl"
+            >
+              <div className="flex items-center gap-3">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">
+                  <AlertTriangle className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Delete your account?</h3>
+                  <p className="text-xs text-muted-foreground">This action is irreversible</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 p-3">
+                <p className="text-xs text-red-700 dark:text-red-300">
+                  Your profile, posts, and all data will be permanently deleted. You will be removed from all plans and group chats.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Your password</label>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    className="input"
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Type <span className="font-bold text-red-600">DELETE</span> to confirm
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteConfirmation}
+                    onChange={(e) => setDeleteConfirmation(e.target.value)}
+                    className="input"
+                    placeholder="DELETE"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowDeleteModal(false); setDeletePassword(""); setDeleteConfirmation(""); }}
+                  className="flex-1 rounded-full border border-border py-2.5 text-sm font-semibold transition hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleteLoading || deleteConfirmation !== "DELETE" || !deletePassword}
+                  className="flex-1 rounded-full bg-red-600 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {deleteLoading ? <><Loader2 className="h-4 w-4 animate-spin inline mr-1" /> Deleting...</> : "Delete account"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -84,26 +84,103 @@ export const api = {
   upload: uploadImage,
 
   auth: {
-    signup: async (data: { username: string; email: string; password: string; displayName: string; location?: string }) => {
-      const res = await request<{ token: string; user: any }>("/auth/signup", {
-        method: "POST",
+    register: async (data: { username: string; email: string; password: string; displayName: string; location?: string; mobile?: string; address?: string; coordinates?: any }) => {
+      const res = await request<{ token: string; user: any; requiresVerification: boolean; message: string }>('/auth/register', {
+        method: 'POST',
         body: JSON.stringify(data),
       });
       setToken(res.token);
-      return { token: res.token, user: normalizeUser(res.user) };
+      return { token: res.token, user: normalizeUser(res.user), requiresVerification: res.requiresVerification, message: res.message };
+    },
+
+    sendOTP: async (data: { email: string; purpose: 'SIGNUP' | 'RESET_PASSWORD' }) => {
+      const res = await request<{ message: string }>('/auth/send-otp', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return res;
+    },
+
+    verifyOTP: async (data: { email: string; otp: string; purpose: 'SIGNUP' | 'RESET_PASSWORD' }) => {
+      const res = await request<{ verified: boolean; token?: string; user?: any; resetToken?: string; message: string }>('/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      if (res.token) setToken(res.token);
+      return { ...res, user: res.user ? normalizeUser(res.user) : undefined };
+    },
+
+    login: async (data: { email: string; password: string }) => {
+      try {
+        const res = await request<{ token: string; user: any; requiresVerification?: boolean; email?: string }>('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+        setToken(res.token);
+        return { token: res.token, user: normalizeUser(res.user) };
+      } catch (err: any) {
+        // If 403 with requiresVerification, re-throw with structured info
+        if (err.message?.includes("verify your email")) {
+          const error = new Error(err.message) as any;
+          error.requiresVerification = true;
+          error.email = data.email;
+          throw error;
+        }
+        throw err;
+      }
+    },
+
+    forgotPassword: async (data: { email: string }) => {
+      const res = await request<{ message: string }>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return res;
+    },
+
+    verifyResetOTP: async (data: { email: string; otp: string }) => {
+      const res = await request<{ verified: boolean; resetToken: string; message: string }>('/auth/verify-reset-otp', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return res;
+    },
+
+    resetPassword: async (data: { resetToken: string; newPassword: string }) => {
+      const res = await request<{ message: string }>('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return res;
+    },
+
+    deleteAccount: async (data: { password: string; confirmation: string }) => {
+      const res = await request<{ message: string }>('/auth/delete-account', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return res;
+    },
+
+    changePassword: async (data: { currentPassword: string; newPassword: string }) => {
+      const res = await request<{ message: string }>('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return res;
+    },
+
+    // Legacy aliases for backward compatibility
+    signup: async (data: { username: string; email: string; password: string; displayName: string; location?: string; mobile?: string; address?: string; coordinates?: any }) => {
+      return api.auth.register(data);
     },
 
     signin: async (data: { email: string; password: string }) => {
-      const res = await request<{ token: string; user: any }>("/auth/signin", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
-      setToken(res.token);
-      return { token: res.token, user: normalizeUser(res.user) };
+      return api.auth.login(data);
     },
 
     me: async () => {
-      const res = await request<{ user: any; followingIds: string[]; savedPostIds: string[] }>("/auth/me");
+      const res = await request<{ user: any; followingIds: string[]; savedPostIds: string[] }>('/auth/me');
       return { user: normalizeUser(res.user), followingIds: res.followingIds || [], savedPostIds: res.savedPostIds || [] };
     },
   },
@@ -209,7 +286,7 @@ export const api = {
       await request(`/posts/${postId}`, { method: "DELETE" });
     },
 
-    update: async (postId: string, data: { caption?: string; location?: string; tags?: string[] }) => {
+    update: async (postId: string, data: { caption?: string; location?: string; tags?: string[]; image?: string }) => {
       const res = await request<{ post: any }>(`/posts/${postId}`, {
         method: "PUT",
         body: JSON.stringify(data),
@@ -273,6 +350,25 @@ export const api = {
 
     rejectJoin: async (planId: string, userId: string) => {
       await request(`/plans/${planId}/reject/${userId}`, { method: "POST" });
+    },
+
+    update: async (planId: string, data: {
+      title?: string; description?: string; destination?: string;
+      coverImage?: string; startDate?: string; endDate?: string;
+      maxParticipants?: number; budget?: number; currency?: string;
+    }) => {
+      const res = await request<{ plan: any }>(`/plans/${planId}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+      return normalizePlan(res.plan);
+    },
+
+    removeParticipant: async (planId: string, userId: string) => {
+      const res = await request<{ plan: any; message: string }>(`/plans/${planId}/participants/${userId}`, {
+        method: "DELETE",
+      });
+      return { plan: normalizePlan(res.plan), message: res.message };
     },
   },
 
@@ -381,6 +477,7 @@ function normalizeUser(u: any) {
   return {
     id: String(u._id || u.id),
     username: u.username,
+    email: u.email || "",
     displayName: u.displayName,
     avatar: u.avatar || "",
     coverImage: u.coverImage || "",
@@ -389,6 +486,7 @@ function normalizeUser(u: any) {
     followers: u.followersCount ?? u.followers?.length ?? 0,
     following: u.followingCount ?? u.following?.length ?? 0,
     isPremium: u.isPremium || false,
+    isVerified: u.isVerified || false,
   };
 }
 

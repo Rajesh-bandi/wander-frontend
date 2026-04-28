@@ -17,6 +17,8 @@ import Guides from "@/pages/Guides";
 import Chats from "@/pages/Chats";
 import Subscription from "@/pages/Subscription";
 import Auth from "@/pages/Auth";
+import ForgotPassword from "@/pages/ForgotPassword";
+import VerifyEmail from "@/pages/VerifyEmail";
 import Notifications from "@/pages/Notifications";
 import SettingsPage from "@/pages/Settings";
 import AdminLogin from "@/pages/admin/AdminLogin";
@@ -27,7 +29,7 @@ const queryClient = new QueryClient();
 
 function Routed() {
   const [loc] = useLocation();
-  const { isLoggedIn, authLoading } = useStore();
+  const { isLoggedIn, authLoading, currentUser } = useStore();
 
   // Admin pages - completely separate auth flow
   if (loc === "/admin/login") return <AdminLogin />;
@@ -36,6 +38,8 @@ function Routed() {
   // Auth pages - always accessible
   if (loc === "/login") return <Auth mode="signin" />;
   if (loc === "/signup" || loc === "/auth") return <Auth mode={loc === "/signup" ? "signup" : "signin"} />;
+  if (loc === "/forgot-password") return <ForgotPassword />;
+  if (loc === "/verify-email") return <VerifyEmail />;
 
   // Show loading while checking auth
   if (authLoading) {
@@ -51,6 +55,11 @@ function Routed() {
 
   // Redirect to login if not authenticated
   if (!isLoggedIn) return <Redirect to="/login" />;
+
+  // If user is logged in but not verified, redirect to verification
+  if (currentUser && !currentUser.isVerified && loc !== "/verify-email") {
+    return <Redirect to="/verify-email" />;
+  }
 
   return (
     <AppLayout>
